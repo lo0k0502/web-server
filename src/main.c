@@ -192,12 +192,9 @@ int main (int argc, char **argv) {
                         write(client_fd, buffer, file_bytes);
                     }
                     fclose(file);
-                    // fdimg = open("732a5748618c3f9083dc35e3edbd95034ae63e7a.png", O_RDONLY);
-                    // sendfile(client_fd, fdimg, NULL, 2400000);
-                    // close(fdimg);
                 }
                 else if (!strncmp(buffer, "GET /script.js", 14)) {
-                    file = fopen("src/web/script.js", "r");
+                    file = fopen("web/script.js", "r");
                     write(client_fd, "HTTP/1.1 200 OK\r\nContent-Type: text/javascript\r\n\r\n", 50);
                     while(!feof(file)){
                         file_bytes = fread(buffer, sizeof(char), BUFFER_SIZE, file);
@@ -206,7 +203,7 @@ int main (int argc, char **argv) {
                     fclose(file);
                 }
                 else {
-                    file = fopen("src/web/index.html", "r");
+                    file = fopen("web/index.html", "r");
                     write(client_fd, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n", 44);
                     while(!feof(file)){
                         file_bytes = fread(buffer, sizeof(char), BUFFER_SIZE, file);

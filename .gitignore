@@ -1,0 +1,6 @@
+# executable file
+*.o
+webserver
+
+# store request
+file

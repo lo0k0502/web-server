@@ -75,12 +75,14 @@ int main (int argc, char **argv) {
                 changePrintColor("white");
 
                 while (confirm != 'y' && confirm != 'n') {
-                    scanf("%c", &confirm);
+                    confirm = getch();
                 }
                 if (confirm == 'y') {
+                    printf("yes\n");
                     server_addr.sin_port = htons(*port);
                     continue;
                 } else {
+                    printf("no\n");
                     exit(0);
                 }
             }

@@ -2,7 +2,6 @@ FLAGS = -I include
 OBJS = \
 		src/main.o \
 		src/utility.o \
-		src/request.o
 
 EXEC = webserver
 

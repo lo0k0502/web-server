@@ -17,7 +17,6 @@
 #include "utility.h"
 
 #define BUFFER_SIZE 2048
-#define HTTP_200_RESPONSE "HTTP/1.1 200 OK\r\n"
 #define PACKET_FILE_NAME "file"
 
 extern int errno;
@@ -36,6 +35,40 @@ static void sigchld_handler() {
     signal(SIGCHLD, sigchld_handler);
 }
 
+void printString(char *str) {
+    printf("%s\n", str);
+}
+
+void responseOk(int fd) {
+    write(fd, "HTTP/1.1 200 OK\r\n", 17);
+}
+
+void responseWebpage(int fd) {
+    FILE *file = fopen("web/index.html", "r");
+    char buffer[BUFFER_SIZE];
+    size_t file_bytes;
+    responseOk(fd);
+    write(fd, "Content-Type: text/html\r\n\r\n", 27);
+    while(!feof(file)){
+        file_bytes = fread(buffer, sizeof(char), BUFFER_SIZE, file);
+        write(fd, buffer, file_bytes);
+    }
+    fclose(file);
+}
+
+void responseFile(int fd, char *path, char *header) {
+    FILE *file = fopen(path, "r");
+    char buffer[BUFFER_SIZE];
+    size_t file_bytes;
+    responseOk(fd);
+    write(fd, header, strlen(header));
+    while(!feof(file)){
+        file_bytes = fread(buffer, sizeof(char), BUFFER_SIZE, file);
+        write(fd, buffer, file_bytes);
+    }
+    fclose(file);
+}
+
 int main (int argc, char **argv) {
     struct sockaddr_in server_addr, client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
@@ -43,9 +76,12 @@ int main (int argc, char **argv) {
     int *port = ports;
     int server_fd, client_fd;
     char buffer[BUFFER_SIZE];
+    char *ptr;
     char separate[] = "\r\n";
     int fdimg;
+    int i;
     FILE *file;
+    FILE *store;
     size_t file_bytes;
     ssize_t state;
     int on = 1;
@@ -101,6 +137,7 @@ int main (int argc, char **argv) {
 
     printf("Server is listening on port %d\n", *port);
     while (1) {
+
         client_fd = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
         if (client_fd == -1) {
             perror("Can't connect to client\n");
@@ -111,8 +148,7 @@ int main (int argc, char **argv) {
             close(server_fd);// child process
 
             changePrintColor("bold-yellow");
-            printf("Got client connection!\n");
-            printf(" - connected from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+            printf("Got client connection!\n - connected from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
             changePrintColor("white");
 
             memset(buffer, 0, BUFFER_SIZE);
@@ -123,6 +159,18 @@ int main (int argc, char **argv) {
                 perror("fopen");
                 exit(EXIT_FAILURE);
             }
+            
+            char **headerLines;
+            char **firstLineItems;
+            char *method;
+            char *uri;
+            char **contentTypeLineItems;
+            readState = read(client_fd, buffer, BUFFER_SIZE - 1);
+            fwrite(buffer, sizeof(char), BUFFER_SIZE - 1, file);
+            headerLines = strsplit(buffer, "\r\n");
+            firstLineItems = strsplit(headerLines[0], " ");
+            method = firstLineItems[0];
+            uri = firstLineItems[1];
 
             while (readState == BUFFER_SIZE - 1) {
                 readState = read(client_fd, buffer, BUFFER_SIZE - 1);
@@ -139,7 +187,7 @@ int main (int argc, char **argv) {
             }
 
             char *file_contents = malloc(sb.st_size);
-            int i = 1;
+            i = 1;
             changePrintColor("bold-green");
             printf("Headers: \n");
             changePrintColor("green");
@@ -157,61 +205,71 @@ int main (int argc, char **argv) {
             fclose(file);
 
             // post
-            if (!strncmp(buffer, "POST", 4)) {
+            if (!strcmp(method, "POST")) {
+                char *content_type;
+                char *boundary;
 
                 printf("Posting\n");
 
-                if (!strncmp(buffer, "POST / ", 7)) {
-                    file = fopen("web/index.html", "r");
-                    write(client_fd, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n", 44);
-                    while(!feof(file)){
+                for (i = 0; 1; i++) {
+                    if (!strncmp(headerLines[i], "Content-Type", 12)) {
+                        printString(headerLines[i]);
+                        contentTypeLineItems = strsplit(headerLines[i], " ");
+                        content_type = contentTypeLineItems[1];
+                        break;
+                    }
+                }
+                if (!strcmp(content_type, "text/html")) {
+                    int title_length;
+                    char *content;
+                    char *file_name;
+                    char destFilePath[] = "uploads/";
+                    file = fopen(PACKET_FILE_NAME, "r");
+
+                    file_bytes = fread(buffer, sizeof(char), BUFFER_SIZE, file);
+                    content = strstr(buffer, "<!DOCTYPE html>");
+                    ptr = strstr(content, "<title>");
+                    ptr += 7;
+                    title_length = strcspn(ptr, "<");
+
+                    char title[title_length];
+                    memset(title, '\0', title_length + 1);
+                    strncpy(title, ptr, title_length);
+
+                    strcat(destFilePath, title);
+                    strcat(destFilePath, ".html");
+                    store = fopen(destFilePath, "w");
+                    fwrite(content, sizeof(char), strlen(content), store);
+
+                    while (!feof(file)) {
                         file_bytes = fread(buffer, sizeof(char), BUFFER_SIZE, file);
-                        write(client_fd, buffer, file_bytes);
+                        fwrite(buffer, sizeof(char), strlen(buffer), store);
                     }
                     fclose(file);
+                    fclose(store);
+                } else if (!strncmp(content_type, "multipart/form-data", 19)) {
+                    printf("Posted form\n");
+                    content_type = stringBefore(content_type, ';');
+                    printString(content_type);
+                    boundary = stringAfter(contentTypeLineItems[2], "=");
+                    printString(boundary);
                 }
+                responseWebpage(client_fd);
             }
 
             // get
-            if (!strncmp(buffer, "GET", 3)) {
+            if (!strcmp(method, "GET")) {
 
                 printf("Getting\n");
 
-                if (!strncmp(buffer, "GET /favicon.ico", 16)) {
-                    file = fopen("assets/favicon.ico", "r");
-                    write(client_fd, "HTTP/1.1 200 OK\r\nContent-Type: image/x-icon\r\n\r\n", 47);
-                    while(!feof(file)){
-                        file_bytes = fread(buffer, sizeof(char), BUFFER_SIZE, file);
-                        write(client_fd, buffer, file_bytes);
-                    }
-                    fclose(file);
-                }
-                else if (!strncmp(buffer, "GET /732a5748618c3f9083dc35e3edbd95034ae63e7a.png", 49)) {
-                    file = fopen("assets/732a5748618c3f9083dc35e3edbd95034ae63e7a.png", "r");
-                    write(client_fd, "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\n\r\n", 44);
-                    while(!feof(file)){
-                        file_bytes = fread(buffer, sizeof(char), BUFFER_SIZE, file);
-                        write(client_fd, buffer, file_bytes);
-                    }
-                    fclose(file);
-                }
-                else if (!strncmp(buffer, "GET /script.js", 14)) {
-                    file = fopen("web/script.js", "r");
-                    write(client_fd, "HTTP/1.1 200 OK\r\nContent-Type: text/javascript\r\n\r\n", 50);
-                    while(!feof(file)){
-                        file_bytes = fread(buffer, sizeof(char), BUFFER_SIZE, file);
-                        write(client_fd, buffer, file_bytes);
-                    }
-                    fclose(file);
-                }
-                else {
-                    file = fopen("web/index.html", "r");
-                    write(client_fd, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n", 44);
-                    while(!feof(file)){
-                        file_bytes = fread(buffer, sizeof(char), BUFFER_SIZE, file);
-                        write(client_fd, buffer, file_bytes);
-                    }
-                    fclose(file);
+                if (!strcmp(uri, "/favicon.ico")) {
+                    responseFile(client_fd, "assets/favicon.ico", "Content-Type: image/x-icon\r\n\r\n");
+                } else if (!strcmp(uri, "/732a5748618c3f9083dc35e3edbd95034ae63e7a.png")) {
+                    responseFile(client_fd, "assets/732a5748618c3f9083dc35e3edbd95034ae63e7a.png", "Content-Type: image/png\r\n\r\n");
+                } else if (!strcmp(uri, "/script.js")) {
+                    responseFile(client_fd, "web/script.js", "Content-Type: text/javascript\r\n\r\n");
+                } else {
+                    responseWebpage(client_fd);
                 }
             }
 

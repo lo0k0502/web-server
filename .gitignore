@@ -4,3 +4,6 @@ webserver
 
 # store request
 file
+
+#vscode settings
+.vscode

@@ -25,8 +25,11 @@
         <div id='body'>
             <h1>Hello!</h1>
             <img style='width: 40%;' src='732a5748618c3f9083dc35e3edbd95034ae63e7a.png' alt='img'>
-            <input type='file' id='file' accept='image/*'>
-            <button id='submit'>上傳</button>
+            <form method='POST' enctype="multipart/form-data">
+                <input type='file' id='file' name='file'>
+                <input type="submit" value="上傳(form)">
+            </form>
+            <button id='submit'>上傳(js)</button>
         </div>
 
         <script src='script.js'></script>

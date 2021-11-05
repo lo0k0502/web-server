@@ -7,19 +7,13 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/sendfile.h>
 #include <signal.h>
 #include <sys/wait.h>
-#include <errno.h>
 
+#include "server_utility.h"
 #include "utility.h"
 
-#define BUFFER_SIZE 2048
 #define PACKET_FILE_NAME "file"
-
-extern int errno;
 
 static void sigchld_handler() {
     pid_t PID;
@@ -35,46 +29,11 @@ static void sigchld_handler() {
     signal(SIGCHLD, sigchld_handler);
 }
 
-void printString(char *str) {
-    printf("%s\n", str);
-}
-
-void responseOk(int fd) {
-    write(fd, "HTTP/1.1 200 OK\r\n", 17);
-}
-
-void responseWebpage(int fd) {
-    FILE *file = fopen("web/index.html", "r");
-    char buffer[BUFFER_SIZE];
-    size_t file_bytes;
-    responseOk(fd);
-    write(fd, "Content-Type: text/html\r\n\r\n", 27);
-    while(!feof(file)){
-        file_bytes = fread(buffer, sizeof(char), BUFFER_SIZE, file);
-        write(fd, buffer, file_bytes);
-    }
-    fclose(file);
-}
-
-void responseFile(int fd, char *path, char *header) {
-    FILE *file = fopen(path, "r");
-    char buffer[BUFFER_SIZE];
-    size_t file_bytes;
-    responseOk(fd);
-    write(fd, header, strlen(header));
-    while(!feof(file)){
-        file_bytes = fread(buffer, sizeof(char), BUFFER_SIZE, file);
-        write(fd, buffer, file_bytes);
-    }
-    fclose(file);
-}
-
 int main (int argc, char **argv) {
     struct sockaddr_in server_addr, client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
-    int ports[] = { 8080, 8081, 8082 };
-    int *port = ports;
     int server_fd, client_fd;
+    char *packet;
     char buffer[BUFFER_SIZE];
     char *ptr;
     char separate[] = "\r\n";
@@ -95,47 +54,8 @@ int main (int argc, char **argv) {
     }
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(int));
 
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    server_addr.sin_port = htons(*port);
+    serverBindandListen(server_fd, server_addr);
 
-    int old_port;
-    char confirm;
-    while (bind(server_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)) == -1) {
-        if (errno == EADDRINUSE) {
-            old_port = *port;
-            if (*port) {
-                printf("Port %d is in use, would you like to use port %d?", old_port, *++port);
-                changePrintColor("bold-cyan");
-                printf(" (y/n) ");
-                changePrintColor("white");
-
-                while (confirm != 'y' && confirm != 'n') {
-                    confirm = getch();
-                }
-                if (confirm == 'y') {
-                    printf("yes\n");
-                    server_addr.sin_port = htons(*port);
-                    continue;
-                } else {
-                    printf("no\n");
-                    exit(0);
-                }
-            }
-            printf("Run out of ports\n");
-        }
-        perror("Server bind error\n");
-        close(server_fd);
-        exit(1);
-    }
-
-    if (listen(server_fd, 10) == -1) {
-        perror("Server listen error\n");
-        close(server_fd);
-        exit(1);
-    }
-
-    printf("Server is listening on port %d\n", *port);
     while (1) {
 
         client_fd = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
@@ -152,84 +72,47 @@ int main (int argc, char **argv) {
             changePrintColor("white");
 
             memset(buffer, 0, BUFFER_SIZE);
-            
+
             int readState = BUFFER_SIZE - 1;
-            file = fopen(PACKET_FILE_NAME, "w");
-            if (!file) {
-                perror("fopen");
-                exit(EXIT_FAILURE);
-            }
             
-            char **headerLines;
+            char **packetLines;
             char **firstLineItems;
             char *method;
             char *uri;
             char **contentTypeLineItems;
             readState = read(client_fd, buffer, BUFFER_SIZE - 1);
-            fwrite(buffer, sizeof(char), BUFFER_SIZE - 1, file);
-            headerLines = strsplit(buffer, "\r\n");
-            firstLineItems = strsplit(headerLines[0], " ");
+            packet = buffer;
+            packetLines = strsplit(packet, "\r\n");
+            firstLineItems = strsplit(packetLines[0], " ");
             method = firstLineItems[0];
             uri = firstLineItems[1];
 
-            while (readState == BUFFER_SIZE - 1) {
-                readState = read(client_fd, buffer, BUFFER_SIZE - 1);
-                fwrite(buffer, sizeof(char), BUFFER_SIZE - 1, file);
-            }
-            fclose(file);
+            // while (readState == BUFFER_SIZE - 1) {
+            //     readState = read(client_fd, buffer, BUFFER_SIZE - 1);
+            //     fwrite(buffer, sizeof(char), BUFFER_SIZE - 1, file);
+            // }
 
-            file = fopen(PACKET_FILE_NAME, "r");
-            
-            struct stat sb;
-            if (stat(PACKET_FILE_NAME, &sb) == -1){
-                perror("stat");
-                exit(EXIT_FAILURE);
-            }
-
-            char *file_contents = malloc(sb.st_size);
-            i = 1;
-            changePrintColor("bold-green");
-            printf("Headers: \n");
-            changePrintColor("green");
-            while (fscanf(file, "%[^\n] ", file_contents) != EOF) {
-                if (!i && (!strstr(file_contents, ": ") && strncmp(file_contents, "-----", 5))) {
-                    break;
-                }
-                printf("> %s\n", file_contents);
-                if (i == 1) {
-                    i = 0;
-                }
-            }
-            changePrintColor("white");
-            free(file_contents);
-            fclose(file);
+            printHeaders(packetLines);
 
             // post
             if (!strcmp(method, "POST")) {
                 char *content_type;
-                char *boundary;
-
-                printf("Posting\n");
 
                 for (i = 0; 1; i++) {
-                    if (!strncmp(headerLines[i], "Content-Type", 12)) {
-                        printString(headerLines[i]);
-                        contentTypeLineItems = strsplit(headerLines[i], " ");
+                    if (!strncmp(packetLines[i], "Content-Type", 12)) {
+                        contentTypeLineItems = strsplit(packetLines[i], " ");
                         content_type = contentTypeLineItems[1];
                         break;
                     }
                 }
+
+                char destFilePath[] = "uploads/";
                 if (!strcmp(content_type, "text/html")) {
                     int title_length;
                     char *content;
-                    char *file_name;
-                    char destFilePath[] = "uploads/";
-                    file = fopen(PACKET_FILE_NAME, "r");
-
-                    file_bytes = fread(buffer, sizeof(char), BUFFER_SIZE, file);
-                    content = strstr(buffer, "<!DOCTYPE html>");
-                    ptr = strstr(content, "<title>");
-                    ptr += 7;
+                    
+                    content = strstr(packet, "<!DOCTYPE html>");
+                    ptr = (strstr(content, "<title>")) + 7;
                     title_length = strcspn(ptr, "<");
 
                     char title[title_length];
@@ -241,26 +124,64 @@ int main (int argc, char **argv) {
                     store = fopen(destFilePath, "w");
                     fwrite(content, sizeof(char), strlen(content), store);
 
-                    while (!feof(file)) {
-                        file_bytes = fread(buffer, sizeof(char), BUFFER_SIZE, file);
-                        fwrite(buffer, sizeof(char), strlen(buffer), store);
-                    }
-                    fclose(file);
                     fclose(store);
                 } else if (!strncmp(content_type, "multipart/form-data", 19)) {
-                    printf("Posted form\n");
+                    char *form_body;
+                    char **formBodyItems;
                     content_type = stringBefore(content_type, ';');
-                    printString(content_type);
-                    boundary = stringAfter(contentTypeLineItems[2], "=");
-                    printString(boundary);
+                    ptr = stringAfter(contentTypeLineItems[2], "=");
+                    char boundary[strlen(ptr) + 2];
+                    memset(boundary, '\0', strlen(ptr) + 3);
+                    strcat(boundary, "--");
+                    strcat(boundary, ptr);
+                    form_body = strstr(packet, boundary);
+                    formBodyItems = strsplit(form_body, "\r\n");
+
+                    char file_name[10];
+                    while (*formBodyItems) {
+                        if (!strncmp(*formBodyItems, "Content-Disposition", 19)) {
+                            ptr = (strstr(*formBodyItems, "filename=\"")) + 10;
+                            memset(file_name, '\0', strlen(ptr));
+                            while (*ptr) {
+                                if (*ptr == '\"') {
+                                    break;
+                                }
+                                strcatChar(file_name, *ptr);
+                                *ptr++;
+                            }
+                        } else if (!strncmp(*formBodyItems, "Content-Type", 12)) {
+                            ptr = *formBodyItems + 14;
+                            break;
+                        }
+                        *formBodyItems++;
+                    }
+                    if (!strcmp(ptr, "text/html")) {
+                        strcat(destFilePath, file_name);
+                        store = fopen(destFilePath, "w");
+
+                        while (*formBodyItems) {
+                            if (!strncmp(*formBodyItems, "<!DOCTYPE html>", 15)) {
+                                break;
+                            }
+                            *formBodyItems++;
+                        }
+
+                        while (*formBodyItems) {
+                            if (!strncmp(*formBodyItems, boundary, strlen(boundary))) {
+                                break;
+                            }
+                            fwrite(strcat(*formBodyItems, "\r\n"), sizeof(char), strlen(*formBodyItems) + 2, store);
+                            *formBodyItems++;
+                        }
+
+                        fclose(store);
+                    }
                 }
                 responseWebpage(client_fd);
             }
 
             // get
             if (!strcmp(method, "GET")) {
-
-                printf("Getting\n");
 
                 if (!strcmp(uri, "/favicon.ico")) {
                     responseFile(client_fd, "assets/favicon.ico", "Content-Type: image/x-icon\r\n\r\n");
@@ -273,7 +194,6 @@ int main (int argc, char **argv) {
                 }
             }
 
-            // remove("file");
             close(client_fd);
             printf("Connection closed\n");
             exit(0);

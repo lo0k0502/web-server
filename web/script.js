@@ -4,7 +4,7 @@ const submitBtn = document.getElementById('submit');
 submitBtn.onclick = async () => {
     const file = fileInput.files[0];
     if (!file) {
-        console.error('No file');
+        alert('No file');
         return;
     }
 
@@ -15,5 +15,7 @@ submitBtn.onclick = async () => {
             body: file,
         },
     );
-    console.log(response);
+    if (response) {
+        alert('上傳成功!');
+    }
 };

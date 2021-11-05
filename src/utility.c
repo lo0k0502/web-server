@@ -26,6 +26,18 @@ void changePrintColor(char *color) {
     fflush(stdout);
 }
 
+void printSizet(size_t a) {
+    printf("%ld\n", a);
+}
+
+void printInt(int a) {
+    printf("%d\n", a);
+}
+
+void printString(char *str) {
+    printf("%s\n", str);
+}
+
 char getch() {
     char buf = 0;
     struct termios old = {0};

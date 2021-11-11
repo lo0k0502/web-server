@@ -4,3 +4,7 @@ webserver
 
 #vscode settings
 .vscode
+
+#other upload files
+uploads/*
+!uploads/example-upload-file.html

@@ -122,6 +122,11 @@ int main (int argc, char **argv) {
                     strcat(destFilePath, title);
                     strcat(destFilePath, ".html");
                     store = fopen(destFilePath, "w");
+                    if (store == NULL) {
+                        perror("Store file error");
+                        exit(1);
+                    }
+
                     fwrite(content, sizeof(char), strlen(content), store);
 
                     fclose(store);
@@ -158,6 +163,10 @@ int main (int argc, char **argv) {
                     if (!strcmp(ptr, "text/html")) {
                         strcat(destFilePath, file_name);
                         store = fopen(destFilePath, "w");
+                        if (store == NULL) {
+                            perror("Store file error");
+                            exit(1);
+                        }
 
                         while (*formBodyItems) {
                             if (!strncmp(*formBodyItems, "<!DOCTYPE html>", 15)) {
@@ -165,7 +174,7 @@ int main (int argc, char **argv) {
                             }
                             *formBodyItems++;
                         }
-
+                        
                         while (*formBodyItems) {
                             if (!strncmp(*formBodyItems, boundary, strlen(boundary))) {
                                 break;

@@ -2,8 +2,5 @@
 *.o
 webserver
 
-#upload files
-uploads
-
 #vscode settings
 .vscode

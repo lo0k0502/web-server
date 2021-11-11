@@ -2,8 +2,8 @@
 *.o
 webserver
 
-# store request
-file
+#upload files
+uploads
 
 #vscode settings
 .vscode

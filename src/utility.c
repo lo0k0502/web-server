@@ -6,8 +6,9 @@
 
 #include "utility.h"
 
-#define NPTRS 2     /* initial number of pointers to allocate (must be > 0) */
+#define NPTRS 2     // initial number of pointers to allocate (must be > 0)
 
+// change terminal print color
 void changePrintColor(char *color) {
     if (!strncmp(color, "red", 3)) printf("\033[0;31m");
     else if (!strncmp(color, "bold-red", 8)) printf("\033[1;31m");
@@ -26,18 +27,22 @@ void changePrintColor(char *color) {
     fflush(stdout);
 }
 
+// Print a size_t type variable
 void printSizet(size_t a) {
     printf("%ld\n", a);
 }
 
+// Print an integer
 void printInt(int a) {
     printf("%d\n", a);
 }
 
+// Print a string (char[], char *)
 void printString(char *str) {
     printf("%s\n", str);
 }
 
+// Scan a char immediately
 char getch() {
     char buf = 0;
     struct termios old = {0};
@@ -59,62 +64,83 @@ char getch() {
     return buf;
 }
 
-char **strsplit (const char *src, const char *delim)
+// split a string into an array
+char **strsplit(const char *src, const char *delim)
 {
-    int i = 0, in = 0, nptrs = NPTRS;       /* index, in/out flag, ptr count */
-    char **dest = NULL;                     /* ptr-to-ptr to allocate/fill */
-    const char *p = src, *ep = p;           /* pointer and end-pointer */
+    int i = 0, in = 0, nptrs = NPTRS; // index, in/out flag, ptr count
+    char **result = NULL; // ptr-to-ptr to allocate/fill
+    const char *ptr = src, *eptr = ptr; // pointer and end-pointer
+    size_t len; // length of token
 
-    /* allocate/validate nptrs pointers for dest */
-    if (!(dest = malloc (nptrs * sizeof *dest))) {
-        perror ("malloc-dest");
-        return NULL;
+    // allocate/validate nptrs pointers for result
+    if (!(result = malloc(nptrs * sizeof *result))) {
+        perror("malloc-result");
+        exit(1);
     }
-    *dest = NULL;   /* set first pointer as sentinel NULL */
 
-    for (;;) {  /* loop continually until end of src reached */
-        if (!*ep || strchr (delim, *ep)) {  /* if at nul-char or delimiter char */
-            size_t len = ep - p;            /* get length of token */
-            if (in && len) {                /* in-word and chars in token */
-                if (i == nptrs - 1) {       /* used pointer == allocated - 1? */
-                    /* realloc dest to temporary pointer/validate */
-                    void *tmp = realloc (dest, 2 * nptrs * sizeof *dest);
+    *result = NULL; // set first pointer as sentinel NULL
+
+    for (;;) {
+        if (!*eptr || strchr(delim, *eptr)) {
+            // if at nul-char or delimiter char
+            len = eptr - ptr;
+            if (in && len) {
+                // in-word and chars in token
+                if (i == nptrs - 1) {
+                    // if used pointer == allocated - 1
+
+                    // realloc result to temporary pointer/validate
+                    void *tmp = realloc(result, 2 * nptrs * sizeof *result);
                     if (!tmp) {
-                        perror ("realloc-dest");
-                        break;  /* don't exit, original dest still valid */
+                        perror("realloc-result");
+                        break; // don't exit, original result still valid
                     }
-                    dest = tmp;             /* assign reallocated block to dest */
-                    nptrs *= 2;             /* increment allocated pointer count */
+                    result = tmp; // assign reallocated block to result
+                    nptrs *= 2; // increment allocated pointer count
                 }
-                /* allocate/validate storage for token */
-                if (!(dest[i] = malloc (len + 1))) {
-                    perror ("malloc-dest[i]");
+                
+                // allocate/validate storage for token
+                if (!(result[i] = malloc(len + 1))) {
+                    perror("malloc-result[i]");
                     break;
                 }
-                memcpy (dest[i], p, len);   /* copy len chars to storage */
-                dest[i++][len] = 0;         /* nul-terminate, advance index */
-                dest[i] = NULL;             /* set next pointer NULL */
+
+                memcpy(result[i], ptr, len); // copy len chars to storage
+                result[i++][len] = 0; // nul-terminate, advance index
+                result[i] = NULL; // set next pointer NULL
             }
-            if (!*ep)                       /* if at end, break */
+            if (!*eptr) {
+                // if at end, break
                 break;
-            in = 0;                         /* set in-word flag 0 (false) */
+            }
+
+            // set in-word flag 0 (false)
+            in = 0;
+        } else {
+            // normal word char
+            if (!in) {
+                // if not in-word, then update start to end-pointer
+                ptr = eptr;
+            }
+
+            // set in-word flag 1 (true)
+            in = 1;
         }
-        else {  /* normal word char */
-            if (!in)                        /* if not in-word */
-                p = ep;                     /* update start to end-pointer */
-            in = 1;                         /* set in-word flag 1 (true) */
-        }
-        ep++;   /* advance to next character */
+
+        // advance to next character
+        eptr++;
     }
 
-    return dest;
+    return result;
 }
 
+// concat char to string
 void strcatChar(char *str , const char c) {
     char arr[2] = { c , '\0' };
     strcat(str , arr);
 }
 
+// return substring before the target char in src string
 char *stringBefore(char *src, const char target) {
     char *res, i;
 
@@ -131,6 +157,7 @@ char *stringBefore(char *src, const char target) {
     return res;
 }
 
+// return substring after the target string in src string
 char *stringAfter(char *src, const char *target) {
     char *res;
 

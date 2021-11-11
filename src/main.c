@@ -25,26 +25,17 @@ static void sigchld_handler() {
         changePrintColor("white");
     }
 
-    /* Re-install handler */
     signal(SIGCHLD, sigchld_handler);
 }
 
 int main (int argc, char **argv) {
     struct sockaddr_in server_addr, client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
-    int server_fd, client_fd;
-    char *packet;
-    char buffer[BUFFER_SIZE];
-    char *ptr;
-    char separate[] = "\r\n";
-    int fdimg;
-    int i;
-    FILE *file;
-    FILE *store;
-    size_t file_bytes;
-    ssize_t state;
-    int on = 1;
+    int server_fd, client_fd, i, on = 1, readState = BUFFER_SIZE - 1;
+    char buffer[BUFFER_SIZE], *packet, *ptr;
+    FILE *file, *store;
 
+    // handle zombie process
     signal(SIGCHLD, sigchld_handler);
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -56,7 +47,7 @@ int main (int argc, char **argv) {
 
     serverBindandListen(server_fd, server_addr);
 
-    while (1) {
+    for (;;) {
 
         client_fd = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
         if (client_fd == -1) {
@@ -72,14 +63,14 @@ int main (int argc, char **argv) {
             changePrintColor("white");
 
             memset(buffer, 0, BUFFER_SIZE);
-
-            int readState = BUFFER_SIZE - 1;
             
             char **packetLines;
             char **firstLineItems;
             char *method;
             char *uri;
             char **contentTypeLineItems;
+
+            // read the packet and manipulate
             readState = read(client_fd, buffer, BUFFER_SIZE - 1);
             packet = buffer;
             packetLines = strsplit(packet, "\r\n");
@@ -94,10 +85,11 @@ int main (int argc, char **argv) {
 
             printHeaders(packetLines);
 
-            // post
+            // manipulate post request
             if (!strcmp(method, "POST")) {
                 char *content_type;
 
+                // check the content type
                 for (i = 0; 1; i++) {
                     if (!strncmp(packetLines[i], "Content-Type", 12)) {
                         contentTypeLineItems = strsplit(packetLines[i], " ");
@@ -106,8 +98,10 @@ int main (int argc, char **argv) {
                     }
                 }
 
-                char destFilePath[] = "uploads/";
+                char destFilePath[] = "uploads/"; // the file path which will be stored (must be in uploads folder)
+
                 if (!strcmp(content_type, "text/html")) {
+                    // if it's a html, find the title in the file to be the file name, then store the html file
                     int title_length;
                     char *content;
                     
@@ -131,20 +125,28 @@ int main (int argc, char **argv) {
 
                     fclose(store);
                 } else if (!strncmp(content_type, "multipart/form-data", 19)) {
+                    // if it's a form, find the boundary to find the position of the data
                     char *form_body;
                     char **formBodyItems;
+                    char file_name[10];
+
                     content_type = stringBefore(content_type, ';');
                     ptr = stringAfter(contentTypeLineItems[2], "=");
+
                     char boundary[strlen(ptr) + 2];
+
                     memset(boundary, '\0', strlen(ptr) + 3);
                     strcat(boundary, "--");
                     strcat(boundary, ptr);
                     form_body = strstr(packet, boundary);
                     formBodyItems = strsplit(form_body, "\r\n");
 
-                    char file_name[10];
+                    // manipulate the form data (only for html file now)
+
+                    // manipulate the form data headers
                     while (*formBodyItems) {
                         if (!strncmp(*formBodyItems, "Content-Disposition", 19)) {
+                            // store its file name in the Content-Disposition line
                             ptr = (strstr(*formBodyItems, "filename=\"")) + 10;
                             memset(file_name, '\0', strlen(ptr));
                             while (*ptr) {
@@ -155,12 +157,15 @@ int main (int argc, char **argv) {
                                 *ptr++;
                             }
                         } else if (!strncmp(*formBodyItems, "Content-Type", 12)) {
+                            // store the content type of the form data
                             ptr = *formBodyItems + 14;
                             break;
                         }
                         *formBodyItems++;
                     }
                     if (!strcmp(ptr, "text/html")) {
+                        // if the content type of the form data is html
+
                         strcat(destFilePath, file_name);
                         store = fopen(destFilePath, "w");
                         if (store == NULL) {
@@ -168,13 +173,15 @@ int main (int argc, char **argv) {
                             exit(1);
                         }
 
+                        // find the beginning of the html file (which is <!DOCTYPE html>)
                         while (*formBodyItems) {
                             if (!strncmp(*formBodyItems, "<!DOCTYPE html>", 15)) {
                                 break;
                             }
                             *formBodyItems++;
                         }
-                        
+
+                        // store the html file line by line until the ending boundary
                         while (*formBodyItems) {
                             if (!strncmp(*formBodyItems, boundary, strlen(boundary))) {
                                 break;
@@ -186,25 +193,31 @@ int main (int argc, char **argv) {
                         fclose(store);
                     }
                 }
+
+                // response the default webpage
                 responseWebpage(client_fd);
             }
 
-            // get
+            // manipulate get request
             if (!strcmp(method, "GET")) {
 
                 if (!strcmp(uri, "/favicon.ico")) {
+                    // response the favicon
                     responseFile(client_fd, "assets/favicon.ico", "Content-Type: image/x-icon\r\n\r\n");
                 } else if (!strcmp(uri, "/732a5748618c3f9083dc35e3edbd95034ae63e7a.png")) {
+                    // response the specific image
                     responseFile(client_fd, "assets/732a5748618c3f9083dc35e3edbd95034ae63e7a.png", "Content-Type: image/png\r\n\r\n");
                 } else if (!strcmp(uri, "/script.js")) {
+                    // response the script.js file
                     responseFile(client_fd, "web/script.js", "Content-Type: text/javascript\r\n\r\n");
                 } else {
+                    // response the default webpage
                     responseWebpage(client_fd);
                 }
             }
 
             close(client_fd);
-            printf("Connection closed\n");
+            printString("Connection closed");
             exit(0);
         }
         close(client_fd);// parent process

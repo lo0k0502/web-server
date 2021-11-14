@@ -129,6 +129,7 @@ void printHeaders(char **headerLines) {
             break;
         }
         printf("> %s\n", *headerLines);
+        fflush(stdout);
         *headerLines++;
         if (i == 0) {
             i++;

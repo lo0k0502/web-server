@@ -30,16 +30,19 @@ void changePrintColor(char *color) {
 // Print a size_t type variable
 void printSizet(size_t a) {
     printf("%ld\n", a);
+    fflush(stdout);
 }
 
 // Print an integer
 void printInt(int a) {
     printf("%d\n", a);
+    fflush(stdout);
 }
 
 // Print a string (char[], char *)
 void printString(char *str) {
     printf("%s\n", str);
+    fflush(stdout);
 }
 
 // Scan a char immediately

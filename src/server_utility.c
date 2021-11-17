@@ -33,7 +33,7 @@ void serverBindandListen(int server_fd, struct sockaddr_in server_addr) {
                 changePrintColor("white");
 
                 while (confirm != 'y' && confirm != 'n') {
-                    // scan for whether y or n is pressed, and react immediately
+                    // check whether y or n is pressed, and react immediately
                     confirm = getch();
                 }
                 if (confirm == 'y') {

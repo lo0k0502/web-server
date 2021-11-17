@@ -15,6 +15,7 @@
 
 #define PACKET_FILE_NAME "file"
 
+// kill zombie process
 static void sigchld_handler() {
     pid_t PID;
     int status;
@@ -38,6 +39,7 @@ int main (int argc, char **argv) {
     // handle zombie process
     signal(SIGCHLD, sigchld_handler);
 
+    // create server socket
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
         perror("Server socket error\n");
